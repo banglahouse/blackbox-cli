@@ -43,11 +43,14 @@ CREATE TABLE IF NOT EXISTS commands (
   id TEXT PRIMARY KEY,
   turn_id TEXT NOT NULL REFERENCES turns(id),
   command TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  cwd TEXT NOT NULL,
   stdout TEXT NOT NULL DEFAULT '',
   stderr TEXT NOT NULL DEFAULT '',
   exit_code INTEGER,
   started_at TEXT NOT NULL,
-  ended_at TEXT
+  ended_at TEXT,
+  duration_ms INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS payloads (
@@ -122,6 +125,10 @@ function getDatabasePath(blackboxRoot) {
 function initializeDatabase(blackboxRoot) {
   const database = new DatabaseSync(getDatabasePath(blackboxRoot));
   database.exec(schema);
+  const columns = database.prepare("PRAGMA table_info(commands)").all().map((column) => column.name);
+  for (const [name, definition] of [["sequence", "INTEGER NOT NULL DEFAULT 0"], ["cwd", "TEXT NOT NULL DEFAULT ''"], ["duration_ms", "INTEGER"]]) {
+    if (!columns.includes(name)) database.exec(`ALTER TABLE commands ADD COLUMN ${name} ${definition}`);
+  }
   database.close();
   return getDatabasePath(blackboxRoot);
 }

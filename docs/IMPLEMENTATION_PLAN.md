@@ -63,7 +63,7 @@ Task status values:
   - User ignore rules are respected.
 
 ## BBX-007
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add the normalized turn/session/command event model and local capture of command execution.
 - Dependencies: `BBX-004`, `BBX-005`, `BBX-006`
 - Acceptance criteria:

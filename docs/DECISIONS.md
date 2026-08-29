@@ -52,3 +52,8 @@
 
 - Decision: Use Git's `check-ignore --no-index` for `.gitignore`, and simple last-match-wins glob rules for `.blackboxignore` plus built-in sensitive patterns.
 - Rationale: This reuses Git's established ignore behavior, supports local overrides, and keeps secret exclusions dependency-free before blobs are written.
+
+## D-011: Observable event recording
+
+- Decision: Record completed commands as immutable rows and use audit events for normalized session/turn lifecycle events; command execution uses Node's synchronous child-process API.
+- Rationale: This captures the full result available at command completion without requiring a mutable in-progress history or agent-specific integration.

@@ -7,6 +7,7 @@ const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
 const { appendAuditEvent, verifyAuditChain } = require("../storage");
 const { captureSnapshot, createCheckpoint } = require("../snapshot");
+const { captureCommand, normalizeEvent, recordSession, recordTurn } = require("../events");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -139,6 +140,33 @@ test("snapshots are repeatable and recorded without changing developer git state
   database.close();
   const checkpoint = createCheckpoint({ repositoryRoot: dir, blackboxRoot, gitDir, repositoryId: "r", id: "cp-1", kind: "BEFORE" });
   assert.deepEqual(checkpoint, { id: "cp-1", snapshotId: first });
+});
+
+test("normalized turns and commands capture observable output", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const blackboxRoot = path.join(gitDir, "blackbox");
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  database.exec("INSERT INTO repositories (id, root, git_dir) VALUES ('r', 'root', 'git')");
+  database.close();
+  const sessionId = recordSession(blackboxRoot, { id: "s1", repositoryId: "r", agent: "codex" });
+  const turnId = recordTurn(blackboxRoot, { id: "t1", sessionId, repositoryId: "r", prompt: "run a check" });
+  const result = captureCommand(blackboxRoot, { turnId, repositoryId: "r", command: process.execPath, args: ["-e", "process.stdout.write('ok'); process.stderr.write('warn')"], cwd: dir });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "ok");
+  assert.equal(result.stderr, "warn");
+  const commandDatabase = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  const command = commandDatabase.prepare("SELECT sequence, cwd, stdout, stderr, exit_code, duration_ms FROM commands WHERE id = ?").get(result.commandId);
+  assert.equal(command.sequence, 1);
+  assert.equal(command.cwd, dir);
+  assert.equal(command.stdout, "ok");
+  assert.equal(command.stderr, "warn");
+  assert.equal(command.exit_code, 0);
+  assert.ok(command.duration_ms >= 0);
+  commandDatabase.close();
+  assert.deepEqual(normalizeEvent("AGENT_MESSAGE", { text: "visible" }), { type: "AGENT_MESSAGE", text: "visible" });
 });
 
 test("help prints usage", () => {
