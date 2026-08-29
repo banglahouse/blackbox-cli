@@ -41,3 +41,9 @@
 
 - Decision: Hash each audit event's canonical JSON envelope, including its ID, repository, type, payload, timestamp, and previous hash; append and verify events in SQLite row order.
 - Rationale: The previous hash makes insertion, deletion, and mutation detectable while keeping the ledger local and dependency-free.
+
+## D-009: Snapshot identity
+
+- Decision: Store each snapshot as a Git tree in the bare shadow repository and use its tree hash as the content-addressed snapshot ID.
+- Rationale: Git trees preserve paths, modes, and blob content without touching the developer's index, branch, or commits; identical states naturally reuse the same objects.
+- Ceiling: File filtering is intentionally deferred to BBX-006; this task only excludes Git's private directory from captured paths.

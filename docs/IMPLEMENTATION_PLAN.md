@@ -45,7 +45,7 @@ Task status values:
   - Verification can detect a broken chain.
 
 ## BBX-005
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add the shadow Git snapshot store and exact before/after checkpoint capture.
 - Dependencies: `BBX-003`, `BBX-004`
 - Acceptance criteria:

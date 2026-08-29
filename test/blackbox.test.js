@@ -6,6 +6,7 @@ const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
 const { appendAuditEvent, verifyAuditChain } = require("../storage");
+const { captureSnapshot, createCheckpoint } = require("../snapshot");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -102,6 +103,27 @@ test("audit events form a verifiable hash chain", () => {
   database.prepare("INSERT INTO audit_events (id, repository_id, event_type, payload, previous_hash, event_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run("e3", "r", "TURN_COMPLETED", "{}", second.eventHash, "tampered", "2026-01-01T00:00:02.000Z");
   database.close();
   assert.deepEqual(verifyAuditChain(blackboxRoot, "r"), { valid: false, eventId: "e3" });
+});
+
+test("snapshots are repeatable and recorded without changing developer git state", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  fs.writeFileSync(path.join(dir, "file.txt"), "before\n");
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const blackboxRoot = path.join(gitDir, "blackbox");
+  const beforeStatus = spawnSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }).stdout;
+  const first = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  const second = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  assert.match(first, /^[a-f0-9]{40}$/);
+  assert.equal(second, first);
+  assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }).stdout, beforeStatus);
+
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  database.exec("INSERT INTO repositories (id, root, git_dir) VALUES ('r', 'root', 'git')");
+  database.close();
+  const checkpoint = createCheckpoint({ repositoryRoot: dir, blackboxRoot, gitDir, repositoryId: "r", id: "cp-1", kind: "BEFORE" });
+  assert.deepEqual(checkpoint, { id: "cp-1", snapshotId: first });
 });
 
 test("help prints usage", () => {
