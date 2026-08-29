@@ -30,3 +30,9 @@
 
 - Decision: Codex edits and verifies tasks but never stages or commits; the parent Node runner independently verifies and commits them.
 - Rationale: Codex's workspace-write sandbox may reject writes to `.git`, while the parent process can safely own Git state transitions.
+
+## D-007: Local SQLite database
+
+- Decision: Store the v1 relational store at `<git-dir>/blackbox/blackbox.sqlite` and create the core tables with Node's built-in `node:sqlite` API.
+- Rationale: SQLite is local, transactional, and already available in the supported Node runtime; no dependency or external service is needed.
+- Ceiling: Historical-row protection is enforced with SQLite triggers; richer constraints and migrations can be added when the recorder needs them.

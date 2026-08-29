@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
+const { initializeDatabase } = require("./storage");
 
 function runGit(args, cwd = process.cwd()) {
   return spawnSync("git", args, {
@@ -57,6 +58,7 @@ function initRepository(cwd = process.cwd()) {
   ensureDir(path.join(blackboxRoot, "runtime"));
   ensureDir(path.join(blackboxRoot, "locks"));
   ensureDir(path.join(blackboxRoot, "snapshots.git"));
+  initializeDatabase(blackboxRoot);
 
   const metadataPath = path.join(blackboxRoot, "repository.json");
   if (!fs.existsSync(metadataPath)) {

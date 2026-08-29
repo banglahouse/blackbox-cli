@@ -27,7 +27,7 @@ Task status values:
   - Re-running init preserves existing metadata without corruption.
 
 ## BBX-003
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Initialize SQLite storage and the first immutable tables for repositories, sessions, turns, checkpoints, commands, payloads, file changes, and audit events.
 - Dependencies: `BBX-002`
 - Acceptance criteria:

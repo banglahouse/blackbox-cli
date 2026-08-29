@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
+const { DatabaseSync } = require("node:sqlite");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -48,6 +49,10 @@ test("init scaffolds the blackbox root inside git", () => {
   assert.ok(fs.existsSync(path.join(blackboxRoot, "runtime")));
   assert.ok(fs.existsSync(path.join(blackboxRoot, "locks")));
   assert.ok(fs.existsSync(path.join(blackboxRoot, "snapshots.git")));
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all().map((row) => row.name);
+  assert.deepEqual(tables, ["audit_events", "checkpoints", "commands", "file_changes", "payloads", "repositories", "sessions", "turns"]);
+  database.close();
   const metadataPath = path.join(blackboxRoot, "repository.json");
   const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
   assert.equal(metadata.root, fs.realpathSync(dir));
@@ -58,6 +63,22 @@ test("init scaffolds the blackbox root inside git", () => {
   const second = runCli(["init"], dir);
   assert.equal(second.status, 0, second.stderr);
   assert.equal(fs.readFileSync(metadataPath, "utf8"), before);
+});
+
+test("database schema creation is idempotent and historical rows are append-only", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  const first = runCli(["init"], dir);
+  assert.equal(first.status, 0, first.stderr);
+  const second = runCli(["init"], dir);
+  assert.equal(second.status, 0, second.stderr);
+
+  const gitDir = spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim();
+  const database = new DatabaseSync(path.resolve(dir, gitDir, "blackbox", "blackbox.sqlite"));
+  database.exec("INSERT INTO repositories (id, root, git_dir) VALUES ('r', 'root', 'git')");
+  assert.throws(() => database.exec("UPDATE repositories SET root = 'changed' WHERE id = 'r'"), /append-only/);
+  assert.throws(() => database.exec("DELETE FROM repositories WHERE id = 'r'"), /append-only/);
+  database.close();
 });
 
 test("help prints usage", () => {
