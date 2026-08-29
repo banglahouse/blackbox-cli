@@ -1,0 +1,21 @@
+{
+  "name": "blackbox",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "bangla_house",
+  "type": "commonjs",
+  "main": "index.js",
+  "bin": {
+    "blackbox": "./index.js"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check index.js",
+    "codex:plan": "node scripts/codex-runner.mjs",
+    "codex:build": "node scripts/codex-runner.mjs"
+  }
+}
