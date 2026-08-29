@@ -20,3 +20,8 @@
 
 - Decision: `blackbox` with no subcommand prints usage and exits successfully; unknown subcommands print usage and fail.
 - Rationale: This is the smallest predictable interface for the bootstrap CLI and keeps later command additions straightforward.
+
+## D-005: Repository metadata identity
+
+- Decision: Store canonical repository root, resolved Git directory, and a SHA-256 ID derived from the canonical root in `repository.json`; write it only when absent.
+- Rationale: The root path is stable across repeated initialization and avoids identity changes caused by temporary symlink paths.

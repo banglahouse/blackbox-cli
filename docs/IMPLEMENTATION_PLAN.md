@@ -18,7 +18,7 @@ Task status values:
   - The first scaffold is idempotent and does not modify unrelated tracked files.
 
 ## BBX-002
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add repository metadata persistence and path helpers for the local Blackbox root, including stable discovery of the Git dir and repository identity.
 - Dependencies: `BBX-001`
 - Acceptance criteria:

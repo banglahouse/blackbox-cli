@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 
 function runGit(args, cwd = process.cwd()) {
@@ -23,11 +24,27 @@ function getGitDir(cwd = process.cwd()) {
     throw new Error("Blackbox requires a Git repository.");
   }
 
-  return path.resolve(cwd, gitDir);
+  return fs.realpathSync(path.resolve(cwd, gitDir));
 }
 
 function getBlackboxRoot(cwd = process.cwd()) {
   return path.join(getGitDir(cwd), "blackbox");
+}
+
+function getRepositoryMetadata(cwd = process.cwd()) {
+  const root = runGit(["rev-parse", "--show-toplevel"], cwd).stdout.trim();
+
+  if (!root) {
+    throw new Error("Blackbox requires a Git repository.");
+  }
+
+  const repositoryRoot = fs.realpathSync(path.resolve(cwd, root));
+
+  return {
+    id: crypto.createHash("sha256").update(repositoryRoot).digest("hex"),
+    root: repositoryRoot,
+    gitDir: getGitDir(cwd),
+  };
 }
 
 function ensureDir(dirPath) {
@@ -40,6 +57,11 @@ function initRepository(cwd = process.cwd()) {
   ensureDir(path.join(blackboxRoot, "runtime"));
   ensureDir(path.join(blackboxRoot, "locks"));
   ensureDir(path.join(blackboxRoot, "snapshots.git"));
+
+  const metadataPath = path.join(blackboxRoot, "repository.json");
+  if (!fs.existsSync(metadataPath)) {
+    fs.writeFileSync(metadataPath, `${JSON.stringify(getRepositoryMetadata(cwd), null, 2)}\n`, "utf8");
+  }
 
   return blackboxRoot;
 }
@@ -90,6 +112,7 @@ if (require.main === module) {
 module.exports = {
   getBlackboxRoot,
   getGitDir,
+  getRepositoryMetadata,
   initRepository,
   main,
   runGit,

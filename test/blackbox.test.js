@@ -48,6 +48,16 @@ test("init scaffolds the blackbox root inside git", () => {
   assert.ok(fs.existsSync(path.join(blackboxRoot, "runtime")));
   assert.ok(fs.existsSync(path.join(blackboxRoot, "locks")));
   assert.ok(fs.existsSync(path.join(blackboxRoot, "snapshots.git")));
+  const metadataPath = path.join(blackboxRoot, "repository.json");
+  const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+  assert.equal(metadata.root, fs.realpathSync(dir));
+  assert.equal(metadata.gitDir, fs.realpathSync(path.resolve(dir, gitDir)));
+  assert.match(metadata.id, /^[a-f0-9]{64}$/);
+
+  const before = fs.readFileSync(metadataPath, "utf8");
+  const second = runCli(["init"], dir);
+  assert.equal(second.status, 0, second.stderr);
+  assert.equal(fs.readFileSync(metadataPath, "utf8"), before);
 });
 
 test("help prints usage", () => {
