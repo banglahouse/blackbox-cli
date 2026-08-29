@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
+const { appendAuditEvent, verifyAuditChain } = require("../storage");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -79,6 +80,28 @@ test("database schema creation is idempotent and historical rows are append-only
   assert.throws(() => database.exec("UPDATE repositories SET root = 'changed' WHERE id = 'r'"), /append-only/);
   assert.throws(() => database.exec("DELETE FROM repositories WHERE id = 'r'"), /append-only/);
   database.close();
+});
+
+test("audit events form a verifiable hash chain", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim();
+  const blackboxRoot = path.resolve(dir, gitDir, "blackbox");
+  const setup = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  setup.exec("INSERT INTO repositories (id, root, git_dir) VALUES ('r', 'root', 'git')");
+  setup.close();
+
+  const first = appendAuditEvent(blackboxRoot, { id: "e1", repositoryId: "r", eventType: "SESSION_STARTED", payload: { agent: "codex" }, createdAt: "2026-01-01T00:00:00.000Z" });
+  const second = appendAuditEvent(blackboxRoot, { id: "e2", repositoryId: "r", eventType: "PROMPT_SUBMITTED", payload: "fix it", createdAt: "2026-01-01T00:00:01.000Z" });
+  assert.equal(first.previousHash, null);
+  assert.equal(second.previousHash, first.eventHash);
+  assert.deepEqual(verifyAuditChain(blackboxRoot, "r"), { valid: true, events: 2 });
+
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  database.prepare("INSERT INTO audit_events (id, repository_id, event_type, payload, previous_hash, event_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run("e3", "r", "TURN_COMPLETED", "{}", second.eventHash, "tampered", "2026-01-01T00:00:02.000Z");
+  database.close();
+  assert.deepEqual(verifyAuditChain(blackboxRoot, "r"), { valid: false, eventId: "e3" });
 });
 
 test("help prints usage", () => {

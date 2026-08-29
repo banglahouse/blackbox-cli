@@ -36,7 +36,7 @@ Task status values:
   - Core tables exist with append-only semantics for historical records.
 
 ## BBX-004
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add the append-only audit ledger and SHA-256 hash-chain helpers.
 - Dependencies: `BBX-003`
 - Acceptance criteria:

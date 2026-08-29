@@ -1,4 +1,5 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
 const schema = `
@@ -125,4 +126,58 @@ function initializeDatabase(blackboxRoot) {
   return getDatabasePath(blackboxRoot);
 }
 
-module.exports = { getDatabasePath, initializeDatabase, schema };
+function openDatabase(blackboxRoot) {
+  const database = new DatabaseSync(getDatabasePath(blackboxRoot));
+  database.exec("PRAGMA foreign_keys = ON");
+  return database;
+}
+
+function serializePayload(payload) {
+  return typeof payload === "string" ? payload : JSON.stringify(payload);
+}
+
+function hashEvent(event) {
+  return crypto.createHash("sha256").update(JSON.stringify(event)).digest("hex");
+}
+
+function appendAuditEvent(blackboxRoot, { id = crypto.randomUUID(), repositoryId, eventType, payload, createdAt = new Date().toISOString() }) {
+  const database = openDatabase(blackboxRoot);
+  const eventPayload = serializePayload(payload);
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    const previousHash = database.prepare("SELECT event_hash FROM audit_events WHERE repository_id = ? ORDER BY rowid DESC LIMIT 1").get(repositoryId)?.event_hash ?? null;
+    const eventHash = hashEvent({ id, repositoryId, eventType, payload: eventPayload, createdAt, previousHash });
+    database.prepare("INSERT INTO audit_events (id, repository_id, event_type, payload, previous_hash, event_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, repositoryId, eventType, eventPayload, previousHash, eventHash, createdAt);
+    database.exec("COMMIT");
+    return { id, eventHash, previousHash };
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
+function verifyAuditChain(blackboxRoot, repositoryId) {
+  const database = openDatabase(blackboxRoot);
+  try {
+    const events = database.prepare("SELECT id, repository_id AS repositoryId, event_type AS eventType, payload, previous_hash AS previousHash, event_hash AS eventHash, created_at AS createdAt FROM audit_events WHERE repository_id = ? ORDER BY rowid").all(repositoryId);
+    let previousHash = null;
+    for (const event of events) {
+      if (event.previousHash !== previousHash || event.eventHash !== hashEvent({
+        id: event.id,
+        repositoryId: event.repositoryId,
+        eventType: event.eventType,
+        payload: event.payload,
+        createdAt: event.createdAt,
+        previousHash,
+      })) return { valid: false, eventId: event.id };
+      previousHash = event.eventHash;
+    }
+    return { valid: true, events: events.length };
+  } finally {
+    database.close();
+  }
+}
+
+module.exports = { appendAuditEvent, getDatabasePath, initializeDatabase, schema, verifyAuditChain };

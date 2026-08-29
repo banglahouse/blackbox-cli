@@ -36,3 +36,8 @@
 - Decision: Store the v1 relational store at `<git-dir>/blackbox/blackbox.sqlite` and create the core tables with Node's built-in `node:sqlite` API.
 - Rationale: SQLite is local, transactional, and already available in the supported Node runtime; no dependency or external service is needed.
 - Ceiling: Historical-row protection is enforced with SQLite triggers; richer constraints and migrations can be added when the recorder needs them.
+
+## D-008: Audit event hashing
+
+- Decision: Hash each audit event's canonical JSON envelope, including its ID, repository, type, payload, timestamp, and previous hash; append and verify events in SQLite row order.
+- Rationale: The previous hash makes insertion, deletion, and mutation detectable while keeping the ledger local and dependency-free.
