@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
-const { initializeDatabase } = require("./storage");
+const { ensureRepository, initializeDatabase } = require("./storage");
 
 function runGit(args, cwd = process.cwd()) {
   return spawnSync("git", args, {
@@ -64,6 +64,7 @@ function initRepository(cwd = process.cwd()) {
   if (!fs.existsSync(metadataPath)) {
     fs.writeFileSync(metadataPath, `${JSON.stringify(getRepositoryMetadata(cwd), null, 2)}\n`, "utf8");
   }
+  ensureRepository(blackboxRoot, getRepositoryMetadata(cwd));
 
   return blackboxRoot;
 }
@@ -74,6 +75,7 @@ function printUsage(stream = process.stdout) {
     "",
     "Commands:",
     "  init",
+    "  codex [args...]",
   ].join("\n"));
   stream.write("\n");
 }
@@ -95,6 +97,11 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     const blackboxRoot = initRepository(cwd);
     io.log(`Initialized Blackbox at ${blackboxRoot}`);
     return 0;
+  }
+
+  if (command === "codex") {
+    const { runCodex } = require("./codex");
+    return runCodex({ args: rest, cwd });
   }
 
   io.error(`Unknown command: ${command}`);

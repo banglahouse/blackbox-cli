@@ -133,6 +133,15 @@ function initializeDatabase(blackboxRoot) {
   return getDatabasePath(blackboxRoot);
 }
 
+function ensureRepository(blackboxRoot, { id, root, gitDir }) {
+  const database = openDatabase(blackboxRoot);
+  try {
+    database.prepare("INSERT OR IGNORE INTO repositories (id, root, git_dir) VALUES (?, ?, ?)").run(id, root, gitDir);
+  } finally {
+    database.close();
+  }
+}
+
 function openDatabase(blackboxRoot) {
   const database = new DatabaseSync(getDatabasePath(blackboxRoot));
   database.exec("PRAGMA foreign_keys = ON");
@@ -187,4 +196,4 @@ function verifyAuditChain(blackboxRoot, repositoryId) {
   }
 }
 
-module.exports = { appendAuditEvent, getDatabasePath, initializeDatabase, schema, verifyAuditChain };
+module.exports = { appendAuditEvent, ensureRepository, getDatabasePath, initializeDatabase, schema, verifyAuditChain };

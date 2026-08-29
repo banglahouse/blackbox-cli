@@ -57,3 +57,8 @@
 
 - Decision: Record completed commands as immutable rows and use audit events for normalized session/turn lifecycle events; command execution uses Node's synchronous child-process API.
 - Rationale: This captures the full result available at command completion without requiring a mutable in-progress history or agent-specific integration.
+
+## D-012: Codex process boundary
+
+- Decision: The Codex adapter launches the local `codex` executable with inherited stdio and forwards arguments unchanged; lifecycle events are recorded around the process.
+- Rationale: Inherited stdio preserves the normal interactive CLI while avoiding credential interception or assumptions about vendor-private protocols.

@@ -72,7 +72,7 @@ Task status values:
   - Captured command output is linked to the correct turn.
 
 ## BBX-008
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add the Codex adapter and translate observable Codex events into normalized Blackbox events.
 - Dependencies: `BBX-007`
 - Acceptance criteria:
