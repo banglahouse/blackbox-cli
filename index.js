@@ -77,6 +77,7 @@ function printUsage(stream = process.stdout) {
     "  init",
     "  codex [args...]",
     "  claude [args...]",
+    "  verify",
   ].join("\n"));
   stream.write("\n");
 }
@@ -127,6 +128,14 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     const result = restoreTurn({ repositoryRoot: metadata.root, blackboxRoot: getBlackboxRoot(cwd), gitDir: metadata.gitDir, turnId: rest[0], side, confirm: rest.includes("--yes") });
     io.log(result.preview);
     return result.confirmed ? 0 : 1;
+  }
+
+  if (command === "verify") {
+    const { verifyRepository } = require("./verify");
+    const metadata = getRepositoryMetadata(cwd);
+    const result = verifyRepository(getBlackboxRoot(cwd), metadata.id);
+    io.log(result.valid ? "VALID" : `INVALID\n${result.reason}`);
+    return result.valid ? 0 : 1;
   }
 
   io.error(`Unknown command: ${command}`);

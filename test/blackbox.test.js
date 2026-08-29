@@ -283,6 +283,24 @@ test("restore previews first, checkpoints current state, and requires confirmati
   assert.equal(kinds.length, 2);
 });
 
+test("verify reports valid history and concrete integrity failures", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  assert.equal(runCli(["init"], dir).status, 0);
+  const valid = runCli(["verify"], dir);
+  assert.equal(valid.status, 0, valid.stderr);
+  assert.match(valid.stdout, /VALID/);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const database = new DatabaseSync(path.join(gitDir, "blackbox", "blackbox.sqlite"));
+  const repo = database.prepare("SELECT id FROM repositories LIMIT 1").get().id;
+  database.prepare("INSERT INTO audit_events (id, repository_id, event_type, payload, previous_hash, event_hash) VALUES (?, ?, ?, ?, ?, ?)").run("bad", repo, "PROMPT_SUBMITTED", "{}", null, "broken");
+  database.close();
+  const invalid = runCli(["verify"], dir);
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stdout, /INVALID/);
+  assert.match(invalid.stdout, /broken audit chain/);
+});
+
 test("help prints usage", () => {
   const result = runCli(["--help"], mkTempDir());
 

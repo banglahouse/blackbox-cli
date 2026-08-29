@@ -82,3 +82,8 @@
 
 - Decision: Restore always creates a `PRE_RESTORE` checkpoint and returns a preview; the CLI changes files only with explicit `--yes` confirmation.
 - Rationale: A non-interactive flag is testable and unambiguous while preserving the PRD's preview-first safety boundary.
+
+## D-017: Verification behavior
+
+- Decision: `blackbox verify` performs read-only SQLite relationship checks, audit-chain validation, and shadow-tree existence checks, returning exit code 0 only when all pass.
+- Rationale: These checks cover the integrity boundaries already implemented without attempting repair or rewriting local history.

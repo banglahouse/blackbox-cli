@@ -117,7 +117,7 @@ Task status values:
   - Restore requires explicit confirmation.
 
 ## BBX-013
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add `blackbox verify` for audit-chain and relationship integrity checks.
 - Dependencies: `BBX-004`, `BBX-005`, `BBX-007`
 - Acceptance criteria:
