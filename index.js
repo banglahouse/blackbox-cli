@@ -76,6 +76,7 @@ function printUsage(stream = process.stdout) {
     "Commands:",
     "  init",
     "  codex [args...]",
+    "  claude [args...]",
   ].join("\n"));
   stream.write("\n");
 }
@@ -102,6 +103,11 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
   if (command === "codex") {
     const { runCodex } = require("./codex");
     return runCodex({ args: rest, cwd });
+  }
+
+  if (command === "claude") {
+    const { runClaude } = require("./claude");
+    return runClaude({ args: rest, cwd });
   }
 
   io.error(`Unknown command: ${command}`);

@@ -9,6 +9,7 @@ const { appendAuditEvent, verifyAuditChain } = require("../storage");
 const { captureSnapshot, createCheckpoint } = require("../snapshot");
 const { captureCommand, normalizeEvent, recordSession, recordTurn } = require("../events");
 const { normalizeCodexEvent, runCodex } = require("../codex");
+const { normalizeClaudeEvent, runClaude } = require("../claude");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -182,6 +183,25 @@ test("Codex adapter forwards arguments and records lifecycle events", () => {
   assert.equal(result, 0);
   assert.equal(fs.readFileSync(marker, "utf8"), "--model|mini");
   assert.deepEqual(normalizeCodexEvent({ type: "agent_message", text: "visible" }), { type: "AGENT_MESSAGE", text: "visible" });
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const database = new DatabaseSync(path.join(gitDir, "blackbox", "blackbox.sqlite"));
+  const types = database.prepare("SELECT event_type FROM audit_events ORDER BY rowid").all().map((row) => row.event_type);
+  assert.deepEqual(types, ["SESSION_STARTED", "SESSION_ENDED"]);
+  database.close();
+});
+
+test("Claude adapter forwards arguments and records lifecycle events", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  const marker = path.join(dir, "args.txt");
+  const result = runClaude({
+    cwd: dir,
+    executable: process.execPath,
+    args: ["-e", `require('node:fs').writeFileSync(${JSON.stringify(marker)}, process.argv.slice(1).join('|'))`, "--", "--model", "sonnet"],
+  });
+  assert.equal(result, 0);
+  assert.equal(fs.readFileSync(marker, "utf8"), "--model|sonnet");
+  assert.deepEqual(normalizeClaudeEvent({ type: "agent_message", text: "visible" }), { type: "AGENT_MESSAGE", text: "visible" });
   const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
   const database = new DatabaseSync(path.join(gitDir, "blackbox", "blackbox.sqlite"));
   const types = database.prepare("SELECT event_type FROM audit_events ORDER BY rowid").all().map((row) => row.event_type);

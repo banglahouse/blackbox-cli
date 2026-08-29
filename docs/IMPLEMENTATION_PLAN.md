@@ -81,7 +81,7 @@ Task status values:
   - Command and message events normalize into Blackbox events.
 
 ## BBX-009
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add the Claude adapter and translate observable Claude events into normalized Blackbox events.
 - Dependencies: `BBX-007`
 - Acceptance criteria:

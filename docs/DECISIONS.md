@@ -62,3 +62,8 @@
 
 - Decision: The Codex adapter launches the local `codex` executable with inherited stdio and forwards arguments unchanged; lifecycle events are recorded around the process.
 - Rationale: Inherited stdio preserves the normal interactive CLI while avoiding credential interception or assumptions about vendor-private protocols.
+
+## D-013: Claude process boundary
+
+- Decision: The Claude adapter uses the same local executable boundary as Codex, with inherited stdio, unchanged arguments, and lifecycle events recorded in the shared ledger.
+- Rationale: This keeps both initial adapters agent-neutral at the storage layer and preserves normal interactive use.
