@@ -99,7 +99,7 @@ Task status values:
   - `file` shows the history of events affecting one path.
 
 ## BBX-011
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add `blackbox blame` and `blackbox why` for line-level provenance.
 - Dependencies: `BBX-010`
 - Acceptance criteria:

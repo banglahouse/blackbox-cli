@@ -72,3 +72,8 @@
 
 - Decision: `log`, `show`, and `file` query local SQLite; `diff` compares the turn's checkpoint tree IDs in the shadow Git repository.
 - Rationale: Each command stays local, and turn-specific diffs remain independent of developer commits and working-tree state.
+
+## D-015: Line provenance fallback
+
+- Decision: Attribute every current line in a recorded changed file to its latest file-change turn; files without a mapping are labeled `MANUAL`.
+- Rationale: This provides useful provenance from local checkpoint-era mappings without inventing line ownership when detailed diff attribution is unavailable.

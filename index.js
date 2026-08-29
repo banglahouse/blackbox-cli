@@ -110,11 +110,12 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     return runClaude({ args: rest, cwd });
   }
 
-  if (["log", "show", "diff", "file"].includes(command)) {
+  if (["log", "show", "diff", "file", "blame", "why"].includes(command)) {
     const { diff, fileHistory, log, show } = require("./inspect");
     const metadata = getRepositoryMetadata(cwd);
     const blackboxRoot = getBlackboxRoot(cwd);
-    const value = command === "log" ? log(blackboxRoot, metadata.id) : command === "show" ? show(blackboxRoot, rest[0]) : command === "diff" ? diff(blackboxRoot, rest[0]) : fileHistory(blackboxRoot, metadata.id, rest[0]);
+    const { blame, why } = require("./provenance");
+    const value = command === "log" ? log(blackboxRoot, metadata.id) : command === "show" ? show(blackboxRoot, rest[0]) : command === "diff" ? diff(blackboxRoot, rest[0]) : command === "file" ? fileHistory(blackboxRoot, metadata.id, rest[0]) : command === "blame" ? blame(blackboxRoot, metadata.id, metadata.root, rest[0]) : why(blackboxRoot, metadata.id, rest[0].slice(0, rest[0].lastIndexOf(":")), Number(rest[0].slice(rest[0].lastIndexOf(":") + 1)));
     io.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
     return 0;
   }

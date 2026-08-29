@@ -233,6 +233,28 @@ test("inspection commands read turns, file history, and checkpoint diffs", () =>
   assert.match(runCli(["diff", "t1"], dir).stdout, /\+after/);
 });
 
+test("blame and why use recorded file provenance", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  fs.writeFileSync(path.join(dir, "file.txt"), "one\ntwo\n");
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const database = new DatabaseSync(path.join(gitDir, "blackbox", "blackbox.sqlite"));
+  const repo = database.prepare("SELECT id FROM repositories LIMIT 1").get().id;
+  database.exec("INSERT INTO sessions (id, repository_id, agent, started_at) VALUES ('s1', '" + repo + "', 'claude', '2026-01-01T00:00:00.000Z')");
+  database.exec("INSERT INTO turns (id, session_id, prompt, status, started_at, before_checkpoint_id) VALUES ('t1', 's1', 'add file', 'COMPLETED', '2026-01-01T00:00:01.000Z', 'cp-before')");
+  database.exec("INSERT INTO file_changes (id, turn_id, path, change_kind) VALUES ('fc1', 't1', 'file.txt', 'CREATED')");
+  database.close();
+  const blame = runCli(["blame", "file.txt"], dir);
+  assert.equal(blame.status, 0, blame.stderr);
+  assert.match(blame.stdout, /t1/);
+  const why = runCli(["why", "file.txt:2"], dir);
+  assert.equal(why.status, 0, why.stderr);
+  assert.match(why.stdout, /add file/);
+  assert.match(why.stdout, /claude/);
+  assert.match(why.stdout, /cp-before/);
+});
+
 test("help prints usage", () => {
   const result = runCli(["--help"], mkTempDir());
 
