@@ -110,6 +110,15 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     return runClaude({ args: rest, cwd });
   }
 
+  if (["log", "show", "diff", "file"].includes(command)) {
+    const { diff, fileHistory, log, show } = require("./inspect");
+    const metadata = getRepositoryMetadata(cwd);
+    const blackboxRoot = getBlackboxRoot(cwd);
+    const value = command === "log" ? log(blackboxRoot, metadata.id) : command === "show" ? show(blackboxRoot, rest[0]) : command === "diff" ? diff(blackboxRoot, rest[0]) : fileHistory(blackboxRoot, metadata.id, rest[0]);
+    io.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
+    return 0;
+  }
+
   io.error(`Unknown command: ${command}`);
   printUsage(process.stderr);
   return 1;

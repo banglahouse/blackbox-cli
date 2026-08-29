@@ -209,6 +209,30 @@ test("Claude adapter forwards arguments and records lifecycle events", () => {
   database.close();
 });
 
+test("inspection commands read turns, file history, and checkpoint diffs", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  fs.writeFileSync(path.join(dir, "file.txt"), "before\n");
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const blackboxRoot = path.join(gitDir, "blackbox");
+  const before = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  fs.writeFileSync(path.join(dir, "file.txt"), "after\n");
+  const after = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  const repo = database.prepare("SELECT id FROM repositories LIMIT 1").get().id;
+  database.exec("INSERT INTO sessions (id, repository_id, agent, started_at) VALUES ('s1', '" + repo + "', 'codex', '2026-01-01T00:00:00.000Z')");
+  database.exec("INSERT INTO checkpoints (id, repository_id, kind, snapshot_id) VALUES ('cp-before', '" + repo + "', 'BEFORE', '" + before + "'), ('cp-after', '" + repo + "', 'AFTER', '" + after + "')");
+  database.exec("INSERT INTO turns (id, session_id, prompt, status, started_at, before_checkpoint_id, after_checkpoint_id) VALUES ('t1', 's1', 'change file', 'COMPLETED', '2026-01-01T00:00:01.000Z', 'cp-before', 'cp-after')");
+  database.exec("INSERT INTO file_changes (id, turn_id, path, change_kind) VALUES ('fc1', 't1', 'file.txt', 'MODIFIED')");
+  database.close();
+  assert.match(runCli(["log"], dir).stdout, /change file/);
+  assert.match(runCli(["show", "t1"], dir).stdout, /codex/);
+  assert.match(runCli(["file", "file.txt"], dir).stdout, /MODIFIED/);
+  assert.match(runCli(["diff", "t1"], dir).stdout, /-before/);
+  assert.match(runCli(["diff", "t1"], dir).stdout, /\+after/);
+});
+
 test("help prints usage", () => {
   const result = runCli(["--help"], mkTempDir());
 

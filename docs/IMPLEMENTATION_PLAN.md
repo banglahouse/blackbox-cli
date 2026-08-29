@@ -90,7 +90,7 @@ Task status values:
   - Command and message events normalize into Blackbox events.
 
 ## BBX-010
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add `blackbox log`, `blackbox show`, `blackbox diff`, and `blackbox file`.
 - Dependencies: `BBX-005`, `BBX-007`, `BBX-008`, `BBX-009`
 - Acceptance criteria:

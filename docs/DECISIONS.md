@@ -67,3 +67,8 @@
 
 - Decision: The Claude adapter uses the same local executable boundary as Codex, with inherited stdio, unchanged arguments, and lifecycle events recorded in the shared ledger.
 - Rationale: This keeps both initial adapters agent-neutral at the storage layer and preserves normal interactive use.
+
+## D-014: Inspection data source
+
+- Decision: `log`, `show`, and `file` query local SQLite; `diff` compares the turn's checkpoint tree IDs in the shadow Git repository.
+- Rationale: Each command stays local, and turn-specific diffs remain independent of developer commits and working-tree state.
