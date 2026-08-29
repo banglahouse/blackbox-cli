@@ -25,3 +25,8 @@
 
 - Decision: Store canonical repository root, resolved Git directory, and a SHA-256 ID derived from the canonical root in `repository.json`; write it only when absent.
 - Rationale: The root path is stable across repeated initialization and avoids identity changes caused by temporary symlink paths.
+
+## D-006: Autonomous runner commit ownership
+
+- Decision: Codex edits and verifies tasks but never stages or commits; the parent Node runner independently verifies and commits them.
+- Rationale: Codex's workspace-write sandbox may reject writes to `.git`, while the parent process can safely own Git state transitions.
