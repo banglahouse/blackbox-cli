@@ -106,8 +106,6 @@ CREATE TRIGGER IF NOT EXISTS commands_append_only_delete
 BEFORE DELETE ON commands BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS payloads_append_only_update
 BEFORE UPDATE ON payloads BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS payloads_append_only_delete
-BEFORE DELETE ON payloads BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS file_changes_append_only_update
 BEFORE UPDATE ON file_changes BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS file_changes_append_only_delete
@@ -125,6 +123,7 @@ function getDatabasePath(blackboxRoot) {
 function initializeDatabase(blackboxRoot) {
   const database = new DatabaseSync(getDatabasePath(blackboxRoot));
   database.exec(schema);
+  database.exec("DROP TRIGGER IF EXISTS payloads_append_only_delete");
   const columns = database.prepare("PRAGMA table_info(commands)").all().map((column) => column.name);
   for (const [name, definition] of [["sequence", "INTEGER NOT NULL DEFAULT 0"], ["cwd", "TEXT NOT NULL DEFAULT ''"], ["duration_ms", "INTEGER"]]) {
     if (!columns.includes(name)) database.exec(`ALTER TABLE commands ADD COLUMN ${name} ${definition}`);

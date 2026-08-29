@@ -11,6 +11,7 @@ const { captureCommand, normalizeEvent, recordSession, recordTurn } = require(".
 const { normalizeCodexEvent, runCodex } = require("../codex");
 const { normalizeClaudeEvent, runClaude } = require("../claude");
 const { restoreTurn } = require("../restore");
+const { clearRepository, hasPassword, prunePayloads, setPassword, size } = require("../maintenance");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -299,6 +300,27 @@ test("verify reports valid history and concrete integrity failures", () => {
   assert.notEqual(invalid.status, 0);
   assert.match(invalid.stdout, /INVALID/);
   assert.match(invalid.stdout, /broken audit chain/);
+});
+
+test("maintenance reports size, previews audited pruning, and protects clear with a password", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  assert.equal(runCli(["init", "--password", "secret"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const blackboxRoot = path.join(gitDir, "blackbox");
+  assert.ok(size(blackboxRoot) > 0);
+  assert.equal(hasPassword(blackboxRoot, "secret"), true);
+  assert.equal(hasPassword(blackboxRoot, "wrong"), false);
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  const repo = database.prepare("SELECT id FROM repositories LIMIT 1").get().id;
+  database.exec("INSERT INTO payloads (id, kind, content, created_at) VALUES ('p1', 'stdout', 'old', '2020-01-01T00:00:00Z')");
+  database.close();
+  const preview = prunePayloads(blackboxRoot, repo, { before: "2021-01-01T00:00:00Z" });
+  assert.equal(preview.confirmed, false);
+  assert.match(preview.preview, /1 payload/);
+  assert.equal(prunePayloads(blackboxRoot, repo, { before: "2021-01-01T00:00:00Z", confirm: true }).count, 1);
+  assert.equal(clearRepository(blackboxRoot, repo, { password: "secret" }).confirmed, false);
+  assert.throws(() => clearRepository(blackboxRoot, repo, { password: "wrong", confirm: true }), /Invalid/);
 });
 
 test("help prints usage", () => {

@@ -125,7 +125,7 @@ Task status values:
   - Verification reports a concrete failure when integrity breaks.
 
 ## BBX-014
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add `blackbox size`, pruning, and password-protected `blackbox clear`.
 - Dependencies: `BBX-003`, `BBX-004`, `BBX-007`, `BBX-013`
 - Acceptance criteria:

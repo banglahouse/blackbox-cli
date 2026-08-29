@@ -87,3 +87,9 @@
 
 - Decision: `blackbox verify` performs read-only SQLite relationship checks, audit-chain validation, and shadow-tree existence checks, returning exit code 0 only when all pass.
 - Rationale: These checks cover the integrity boundaries already implemented without attempting repair or rewriting local history.
+
+## D-018: Destructive maintenance
+
+- Decision: Store only a salted scrypt password verifier, require it for `clear`, and require `--yes` after a preview; pruning removes only unreferenced payload rows.
+- Rationale: This keeps destructive actions local and explicit while preserving historical metadata and avoiding plaintext credentials.
+- Ceiling: Output pruning currently targets standalone payload rows; inline command output migration can be added when payload storage is wired into command capture.

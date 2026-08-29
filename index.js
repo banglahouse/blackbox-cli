@@ -91,12 +91,14 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
   }
 
   if (command === "init") {
-    if (rest.length > 0) {
-      io.error("blackbox init does not accept extra arguments yet.");
+    const passwordIndex = rest.indexOf("--password");
+    if (rest.length > 0 && (passwordIndex < 0 || rest.length !== 2 || !rest[passwordIndex + 1])) {
+      io.error("blackbox init accepts only --password <password>.");
       return 1;
     }
 
     const blackboxRoot = initRepository(cwd);
+    if (passwordIndex >= 0) require("./maintenance").setPassword(blackboxRoot, rest[passwordIndex + 1]);
     io.log(`Initialized Blackbox at ${blackboxRoot}`);
     return 0;
   }
@@ -136,6 +138,31 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     const result = verifyRepository(getBlackboxRoot(cwd), metadata.id);
     io.log(result.valid ? "VALID" : `INVALID\n${result.reason}`);
     return result.valid ? 0 : 1;
+  }
+
+  if (command === "size") {
+    const { size } = require("./maintenance");
+    io.log(`${size(getBlackboxRoot(cwd))} bytes`);
+    return 0;
+  }
+
+  if (command === "prune") {
+    if (rest[0] !== "outputs" || rest[1] !== "--before" || !rest[2]) throw new Error("Usage: blackbox prune outputs --before <date> [--yes]");
+    const { prunePayloads } = require("./maintenance");
+    const metadata = getRepositoryMetadata(cwd);
+    const result = prunePayloads(getBlackboxRoot(cwd), metadata.id, { before: rest[2], confirm: rest.includes("--yes") });
+    io.log(result.preview);
+    return result.confirmed ? 0 : 1;
+  }
+
+  if (command === "clear") {
+    const passwordIndex = rest.indexOf("--password");
+    if (passwordIndex < 0 || !rest[passwordIndex + 1]) throw new Error("Usage: blackbox clear --password <password> [--yes]");
+    const { clearRepository } = require("./maintenance");
+    const metadata = getRepositoryMetadata(cwd);
+    const result = clearRepository(getBlackboxRoot(cwd), metadata.id, { password: rest[passwordIndex + 1], confirm: rest.includes("--yes") });
+    io.log(result.preview);
+    return result.confirmed ? 0 : 1;
   }
 
   io.error(`Unknown command: ${command}`);
