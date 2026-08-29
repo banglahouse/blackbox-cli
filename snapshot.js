@@ -16,6 +16,39 @@ function ensureShadowRepository(shadowRoot) {
   if (!fs.existsSync(path.join(shadowRoot, "HEAD"))) runGit(["init", "--bare", shadowRoot]);
 }
 
+function gitIgnoredFiles(root, files) {
+  if (!files.length) return new Set();
+  const result = spawnSync("git", ["-C", root, "check-ignore", "--no-index", "--stdin", "-z"], {
+    encoding: "utf8",
+    input: `${files.map((filePath) => path.relative(root, filePath)).join("\0")}\0`,
+  });
+  return new Set(result.status === 0 ? result.stdout.split("\0").filter(Boolean) : []);
+}
+
+function readRules(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, "utf8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
+}
+
+function matchesRule(relativePath, rule) {
+  const directoryRule = rule.endsWith("/");
+  const pattern = directoryRule ? `${rule}**` : rule;
+  try {
+    return path.matchesGlob(relativePath, pattern) || path.matchesGlob(relativePath, `**/${pattern}`);
+  } catch {
+    return false;
+  }
+}
+
+function matchesUserRules(relativePath, rules) {
+  let ignored = false;
+  for (const rule of rules) {
+    const negated = rule.startsWith("!");
+    if (matchesRule(relativePath, negated ? rule.slice(1) : rule)) ignored = !negated;
+  }
+  return ignored;
+}
+
 function collectFiles(root, gitDir) {
   const files = [];
   const excludedRoot = fs.realpathSync(gitDir);
@@ -29,7 +62,13 @@ function collectFiles(root, gitDir) {
     }
   }
   visit(root);
-  return files;
+  const rootRules = readRules(path.join(root, ".blackboxignore"));
+  const builtInRules = [".env", ".env.*", "*.pem", "*.key", "credentials*", "secrets/"];
+  const gitIgnored = gitIgnoredFiles(root, files);
+  return files.filter((filePath) => {
+    const relativePath = path.relative(root, filePath).split(path.sep).join("/");
+    return !gitIgnored.has(relativePath) && !matchesUserRules(relativePath, [...builtInRules, ...rootRules]);
+  });
 }
 
 function blobForFile(shadowRoot, filePath) {

@@ -47,3 +47,8 @@
 - Decision: Store each snapshot as a Git tree in the bare shadow repository and use its tree hash as the content-addressed snapshot ID.
 - Rationale: Git trees preserve paths, modes, and blob content without touching the developer's index, branch, or commits; identical states naturally reuse the same objects.
 - Ceiling: File filtering is intentionally deferred to BBX-006; this task only excludes Git's private directory from captured paths.
+
+## D-010: Snapshot filtering
+
+- Decision: Use Git's `check-ignore --no-index` for `.gitignore`, and simple last-match-wins glob rules for `.blackboxignore` plus built-in sensitive patterns.
+- Rationale: This reuses Git's established ignore behavior, supports local overrides, and keeps secret exclusions dependency-free before blobs are written.

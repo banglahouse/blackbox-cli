@@ -54,7 +54,7 @@ Task status values:
   - Snapshot creation is content-addressed and repeatable.
 
 ## BBX-006
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add file filtering for `.gitignore`, `.blackboxignore`, and built-in sensitive exclusions.
 - Dependencies: `BBX-005`
 - Acceptance criteria:

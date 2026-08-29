@@ -109,6 +109,14 @@ test("snapshots are repeatable and recorded without changing developer git state
   const dir = mkTempDir();
   assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
   fs.writeFileSync(path.join(dir, "file.txt"), "before\n");
+  fs.writeFileSync(path.join(dir, ".gitignore"), "ignored.txt\n");
+  fs.writeFileSync(path.join(dir, ".blackboxignore"), "private/\n!private/keep.txt\n");
+  fs.writeFileSync(path.join(dir, "ignored.txt"), "ignored\n");
+  fs.writeFileSync(path.join(dir, ".env"), "secret\n");
+  fs.writeFileSync(path.join(dir, "certificate.pem"), "secret\n");
+  fs.mkdirSync(path.join(dir, "private"));
+  fs.writeFileSync(path.join(dir, "private", "data.txt"), "private\n");
+  fs.writeFileSync(path.join(dir, "private", "keep.txt"), "kept\n");
   assert.equal(runCli(["init"], dir).status, 0);
   const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
   const blackboxRoot = path.join(gitDir, "blackbox");
@@ -118,6 +126,13 @@ test("snapshots are repeatable and recorded without changing developer git state
   assert.match(first, /^[a-f0-9]{40}$/);
   assert.equal(second, first);
   assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: dir, encoding: "utf8" }).stdout, beforeStatus);
+  const shadowTree = spawnSync("git", ["--git-dir", path.join(blackboxRoot, "snapshots.git"), "ls-tree", "-r", "--name-only", first], { encoding: "utf8" }).stdout.split(/\r?\n/).filter(Boolean);
+  assert.ok(shadowTree.includes("file.txt"));
+  assert.ok(shadowTree.includes("private/keep.txt"));
+  assert.ok(!shadowTree.includes("ignored.txt"));
+  assert.ok(!shadowTree.includes(".env"));
+  assert.ok(!shadowTree.includes("certificate.pem"));
+  assert.ok(!shadowTree.includes("private/data.txt"));
 
   const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
   database.exec("INSERT INTO repositories (id, root, git_dir) VALUES ('r', 'root', 'git')");
