@@ -10,6 +10,7 @@ const { captureSnapshot, createCheckpoint } = require("../snapshot");
 const { captureCommand, normalizeEvent, recordSession, recordTurn } = require("../events");
 const { normalizeCodexEvent, runCodex } = require("../codex");
 const { normalizeClaudeEvent, runClaude } = require("../claude");
+const { restoreTurn } = require("../restore");
 
 const cliPath = path.resolve(__dirname, "..", "index.js");
 
@@ -253,6 +254,33 @@ test("blame and why use recorded file provenance", () => {
   assert.match(why.stdout, /add file/);
   assert.match(why.stdout, /claude/);
   assert.match(why.stdout, /cp-before/);
+});
+
+test("restore previews first, checkpoints current state, and requires confirmation", () => {
+  const dir = mkTempDir();
+  assert.equal(spawnSync("git", ["init"], { cwd: dir }).status, 0);
+  fs.writeFileSync(path.join(dir, "file.txt"), "before\n");
+  assert.equal(runCli(["init"], dir).status, 0);
+  const gitDir = fs.realpathSync(path.resolve(dir, spawnSync("git", ["rev-parse", "--git-dir"], { cwd: dir, encoding: "utf8" }).stdout.trim()));
+  const blackboxRoot = path.join(gitDir, "blackbox");
+  const before = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  fs.writeFileSync(path.join(dir, "file.txt"), "after\n");
+  const after = captureSnapshot({ repositoryRoot: dir, blackboxRoot, gitDir });
+  const database = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite"));
+  const repo = database.prepare("SELECT id FROM repositories LIMIT 1").get().id;
+  database.exec("INSERT INTO sessions (id, repository_id, agent, started_at) VALUES ('s1', '" + repo + "', 'codex', '2026-01-01T00:00:00.000Z')");
+  database.exec("INSERT INTO checkpoints (id, repository_id, kind, snapshot_id) VALUES ('cp-before', '" + repo + "', 'BEFORE', '" + before + "'), ('cp-after', '" + repo + "', 'AFTER', '" + after + "')");
+  database.exec("INSERT INTO turns (id, session_id, prompt, status, started_at, before_checkpoint_id, after_checkpoint_id) VALUES ('t1', 's1', 'change file', 'COMPLETED', '2026-01-01T00:00:01.000Z', 'cp-before', 'cp-after')");
+  database.close();
+  const preview = restoreTurn({ repositoryRoot: dir, blackboxRoot, gitDir, turnId: "t1", side: "before" });
+  assert.equal(preview.confirmed, false);
+  assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "after\n");
+  assert.match(preview.preview, /file.txt/);
+  const restored = restoreTurn({ repositoryRoot: dir, blackboxRoot, gitDir, turnId: "t1", side: "before", confirm: true });
+  assert.equal(restored.confirmed, true);
+  assert.equal(fs.readFileSync(path.join(dir, "file.txt"), "utf8"), "before\n");
+  const kinds = new DatabaseSync(path.join(blackboxRoot, "blackbox.sqlite")).prepare("SELECT kind FROM checkpoints WHERE kind = 'PRE_RESTORE'").all();
+  assert.equal(kinds.length, 2);
 });
 
 test("help prints usage", () => {

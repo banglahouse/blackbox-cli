@@ -108,7 +108,7 @@ Task status values:
   - Provenance is derived from checkpoint history, not Git commit history.
 
 ## BBX-012
-- Status: `PENDING`
+- Status: `COMPLETE`
 - Scope: Add preview-first restore with automatic pre-restore checkpointing and confirmation.
 - Dependencies: `BBX-005`, `BBX-007`, `BBX-010`
 - Acceptance criteria:

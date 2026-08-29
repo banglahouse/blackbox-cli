@@ -120,6 +120,15 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     return 0;
   }
 
+  if (command === "restore") {
+    const side = rest.includes("--after") ? "after" : "before";
+    const { restoreTurn } = require("./restore");
+    const metadata = getRepositoryMetadata(cwd);
+    const result = restoreTurn({ repositoryRoot: metadata.root, blackboxRoot: getBlackboxRoot(cwd), gitDir: metadata.gitDir, turnId: rest[0], side, confirm: rest.includes("--yes") });
+    io.log(result.preview);
+    return result.confirmed ? 0 : 1;
+  }
+
   io.error(`Unknown command: ${command}`);
   printUsage(process.stderr);
   return 1;

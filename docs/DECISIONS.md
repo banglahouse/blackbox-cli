@@ -77,3 +77,8 @@
 
 - Decision: Attribute every current line in a recorded changed file to its latest file-change turn; files without a mapping are labeled `MANUAL`.
 - Rationale: This provides useful provenance from local checkpoint-era mappings without inventing line ownership when detailed diff attribution is unavailable.
+
+## D-016: Restore confirmation
+
+- Decision: Restore always creates a `PRE_RESTORE` checkpoint and returns a preview; the CLI changes files only with explicit `--yes` confirmation.
+- Rationale: A non-interactive flag is testable and unambiguous while preserving the PRD's preview-first safety boundary.
