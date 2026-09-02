@@ -14,7 +14,7 @@ function runGit(args, cwd = process.cwd()) {
 }
 
 function getGitDir(cwd = process.cwd()) {
-  const result = runGit(["rev-parse", "--git-dir"], cwd);
+  const result = runGit(["rev-parse", "--git-common-dir"], cwd);
 
   if (result.status !== 0) {
     throw new Error("Blackbox requires a Git repository.");
@@ -26,6 +26,12 @@ function getGitDir(cwd = process.cwd()) {
   }
 
   return fs.realpathSync(path.resolve(cwd, gitDir));
+}
+
+function getWorktreeGitDir(cwd = process.cwd()) {
+  const result = runGit(["rev-parse", "--git-dir"], cwd);
+  if (result.status !== 0 || !result.stdout.trim()) throw new Error("Blackbox requires a Git repository.");
+  return fs.realpathSync(path.resolve(cwd, result.stdout.trim()));
 }
 
 function getBlackboxRoot(cwd = process.cwd()) {
@@ -40,11 +46,21 @@ function getRepositoryMetadata(cwd = process.cwd()) {
   }
 
   const repositoryRoot = fs.realpathSync(path.resolve(cwd, root));
+  const gitDir = getGitDir(cwd);
+  const metadataPath = path.join(gitDir, "blackbox", "repository.json");
+  let stored;
+  if (fs.existsSync(metadataPath)) {
+    try { stored = JSON.parse(fs.readFileSync(metadataPath, "utf8")); } catch {}
+  }
 
   return {
-    id: crypto.createHash("sha256").update(repositoryRoot).digest("hex"),
+    // repository.json lives below the canonical common directory, so an
+    // existing ID is safe to reuse even when it was created by the old
+    // worktree-root identity scheme.
+    id: stored?.id || crypto.createHash("sha256").update(gitDir).digest("hex"),
     root: repositoryRoot,
-    gitDir: getGitDir(cwd),
+    gitDir,
+    worktreeGitDir: getWorktreeGitDir(cwd),
   };
 }
 
@@ -75,15 +91,33 @@ function printUsage(stream = process.stdout) {
     "",
     "Commands:",
     "  init",
+    "  status",
     "  codex [args...]",
     "  claude [args...]",
+    "  log",
+    "  show <turn-id>",
+    "  diff <turn-id>",
+    "  file <path>",
+    "  blame <path>",
+    "  why <file>:<line>",
+    "  restore <turn-id> --before|--after [--yes]",
     "  verify",
   ].join("\n"));
   stream.write("\n");
 }
 
-function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
+function requireArgument(rest, usage) {
+  if (!rest[0]) throw new Error(`Usage: ${usage}`);
+  return rest[0];
+}
+
+async function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
   const [command, ...rest] = argv;
+
+  if (command === "--version" || command === "-v") {
+    io.log(require("./package.json").version);
+    return 0;
+  }
 
   if (!command || command === "-h" || command === "--help") {
     printUsage(process.stdout);
@@ -118,12 +152,28 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     const metadata = getRepositoryMetadata(cwd);
     const blackboxRoot = getBlackboxRoot(cwd);
     const { blame, why } = require("./provenance");
-    const value = command === "log" ? log(blackboxRoot, metadata.id) : command === "show" ? show(blackboxRoot, rest[0]) : command === "diff" ? diff(blackboxRoot, rest[0]) : command === "file" ? fileHistory(blackboxRoot, metadata.id, rest[0]) : command === "blame" ? blame(blackboxRoot, metadata.id, metadata.root, rest[0]) : why(blackboxRoot, metadata.id, rest[0].slice(0, rest[0].lastIndexOf(":")), Number(rest[0].slice(rest[0].lastIndexOf(":") + 1)));
+    if (command === "log") {
+      io.log(JSON.stringify(log(blackboxRoot, metadata.id), null, 2));
+      return 0;
+    }
+    const target = requireArgument(rest, `blackbox ${command} <${command === "why" ? "file:line" : command === "show" || command === "diff" ? "turn-id" : "path"}>`);
+    let value;
+    if (command === "show") value = show(blackboxRoot, target);
+    else if (command === "diff") value = diff(blackboxRoot, target);
+    else if (command === "file") value = fileHistory(blackboxRoot, metadata.id, target);
+    else if (command === "blame") value = blame(blackboxRoot, metadata.id, metadata.root, target);
+    else {
+      const separator = target.lastIndexOf(":");
+      const line = Number(target.slice(separator + 1));
+      if (separator <= 0 || !Number.isInteger(line) || line < 1) throw new Error("Usage: blackbox why <file>:<line>");
+      value = why(blackboxRoot, metadata.id, target.slice(0, separator), line);
+    }
     io.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
     return 0;
   }
 
   if (command === "restore") {
+    requireArgument(rest, "blackbox restore <turn-id> --before|--after [--yes]");
     const side = rest.includes("--after") ? "after" : "before";
     const { restoreTurn } = require("./restore");
     const metadata = getRepositoryMetadata(cwd);
@@ -138,6 +188,14 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
     const result = verifyRepository(getBlackboxRoot(cwd), metadata.id);
     io.log(result.valid ? "VALID" : `INVALID\n${result.reason}`);
     return result.valid ? 0 : 1;
+  }
+
+  if (command === "status") {
+    const metadata = getRepositoryMetadata(cwd);
+    const blackboxRoot = getBlackboxRoot(cwd);
+    const { log } = require("./inspect");
+    io.log(JSON.stringify({ repository: metadata.root, turns: log(blackboxRoot, metadata.id).length }, null, 2));
+    return 0;
   }
 
   if (command === "size") {
@@ -170,20 +228,21 @@ function main(argv = process.argv.slice(2), cwd = process.cwd(), io = console) {
   return 1;
 }
 
-if (require.main === module) {
-  try {
-    process.exitCode = main();
-  } catch (error) {
-    process.stderr.write(`${error.message}\n`);
-    process.exitCode = 1;
-  }
-}
-
 module.exports = {
   getBlackboxRoot,
   getGitDir,
+  getWorktreeGitDir,
   getRepositoryMetadata,
   initRepository,
   main,
   runGit,
 };
+
+if (require.main === module) {
+  try {
+    Promise.resolve(main()).then((code) => { process.exitCode = code; }).catch((error) => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
+  } catch (error) {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  }
+}

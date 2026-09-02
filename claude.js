@@ -1,8 +1,4 @@
-const crypto = require("node:crypto");
-const { spawnSync } = require("node:child_process");
-const { getRepositoryMetadata, initRepository } = require("./index");
-const { appendAuditEvent } = require("./storage");
-const { recordSession } = require("./events");
+const { runAgent } = require("./adapter");
 
 const CLAUDE_EVENT_TYPES = Object.freeze({
   session_started: "SESSION_STARTED",
@@ -20,18 +16,8 @@ function normalizeClaudeEvent(event) {
   return type ? { ...event, type } : null;
 }
 
-function recordSessionEnded(blackboxRoot, repositoryId, sessionId, createdAt = new Date().toISOString()) {
-  return appendAuditEvent(blackboxRoot, { repositoryId, eventType: "SESSION_ENDED", payload: { type: "SESSION_ENDED", sessionId }, createdAt });
-}
-
-function runClaude({ args = [], cwd = process.cwd(), executable = "claude", spawn = spawnSync } = {}) {
-  const metadata = getRepositoryMetadata(cwd);
-  const blackboxRoot = initRepository(cwd);
-  const sessionId = crypto.randomUUID();
-  recordSession(blackboxRoot, { id: sessionId, repositoryId: metadata.id, agent: "claude" });
-  const result = spawn(executable, args, { cwd, stdio: "inherit" });
-  recordSessionEnded(blackboxRoot, metadata.id, sessionId);
-  return result.status ?? 1;
+function runClaude({ args = [], cwd = process.cwd(), executable = "claude", spawn, prompt } = {}) {
+  return runAgent({ agent: "claude", args, cwd, executable, spawnProcess: spawn, prompt });
 }
 
 module.exports = { normalizeClaudeEvent, runClaude };

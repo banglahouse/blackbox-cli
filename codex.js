@@ -1,8 +1,6 @@
-const crypto = require("node:crypto");
+const { runAgent } = require("./adapter");
+const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { getRepositoryMetadata, initRepository } = require("./index");
-const { appendAuditEvent } = require("./storage");
-const { recordSession } = require("./events");
 
 const CODEX_EVENT_TYPES = Object.freeze({
   session_started: "SESSION_STARTED",
@@ -20,18 +18,12 @@ function normalizeCodexEvent(event) {
   return type ? { ...event, type } : null;
 }
 
-function recordSessionEnded(blackboxRoot, repositoryId, sessionId, createdAt = new Date().toISOString()) {
-  return appendAuditEvent(blackboxRoot, { repositoryId, eventType: "SESSION_ENDED", payload: { type: "SESSION_ENDED", sessionId }, createdAt });
-}
-
-function runCodex({ args = [], cwd = process.cwd(), executable = "codex", spawn = spawnSync } = {}) {
-  const metadata = getRepositoryMetadata(cwd);
-  const blackboxRoot = initRepository(cwd);
-  const sessionId = crypto.randomUUID();
-  recordSession(blackboxRoot, { id: sessionId, repositoryId: metadata.id, agent: "codex" });
-  const result = spawn(executable, args, { cwd, stdio: "inherit" });
-  recordSessionEnded(blackboxRoot, metadata.id, sessionId);
-  return result.status ?? 1;
+function runCodex({ args = [], cwd = process.cwd(), executable = "codex", spawn, prompt } = {}) {
+  if (!args.includes("exec") && !args.includes("--version") && !spawn && executable === "codex") {
+    const result = spawnSync(process.execPath, [path.join(__dirname, "codex-app-server.js"), ...args], { cwd, stdio: "inherit" });
+    return result.status ?? 1;
+  }
+  return runAgent({ agent: "codex", args, cwd, executable, spawnProcess: spawn, prompt });
 }
 
 module.exports = { normalizeCodexEvent, runCodex };

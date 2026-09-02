@@ -7,6 +7,13 @@ function database(blackboxRoot) {
   return new DatabaseSync(getDatabasePath(blackboxRoot));
 }
 
+function attachOutput(database, commands) {
+  return commands.map((command) => {
+    for (const stream of ["stdout", "stderr"]) command[stream] = database.prepare("SELECT content FROM command_output_chunks WHERE command_id = ? AND stream = ? ORDER BY sequence").all(command.id).map((chunk) => chunk.content).join("");
+    return command;
+  });
+}
+
 function log(blackboxRoot, repositoryId) {
   const db = database(blackboxRoot);
   try {
@@ -21,7 +28,9 @@ function show(blackboxRoot, turnId) {
   try {
     const turn = db.prepare("SELECT t.*, s.agent, s.repository_id AS repositoryId FROM turns t JOIN sessions s ON s.id = t.session_id WHERE t.id = ?").get(turnId);
     if (!turn) throw new Error(`Turn not found: ${turnId}`);
-    turn.commands = db.prepare("SELECT sequence, command, cwd, stdout, stderr, exit_code AS exitCode, started_at AS startedAt, ended_at AS endedAt, duration_ms AS durationMs FROM commands WHERE turn_id = ? ORDER BY sequence").all(turnId);
+    turn.commands = attachOutput(db, db.prepare("SELECT id, sequence, command, cwd, stdout, stderr, exit_code AS exitCode, started_at AS startedAt, ended_at AS endedAt, duration_ms AS durationMs FROM commands WHERE turn_id = ? ORDER BY sequence").all(turnId));
+    turn.files = db.prepare("SELECT path, change_kind AS changeKind FROM file_changes WHERE turn_id = ? ORDER BY rowid").all(turnId);
+    turn.events = db.prepare("SELECT event_type AS type, payload, created_at AS createdAt FROM audit_events WHERE payload LIKE ? ORDER BY rowid").all(`%${turnId}%`).map((event) => ({ ...event, payload: JSON.parse(event.payload) }));
     return turn;
   } finally {
     db.close();

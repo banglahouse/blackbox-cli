@@ -2,8 +2,8 @@
 
 ## D-001: Blackbox state root
 
-- Decision: Store all Blackbox runtime state under the repository Git directory returned by `git rev-parse --git-dir`, rooted at `<git-dir>/blackbox`.
-- Rationale: This respects the PRD, avoids polluting the source tree, and works with normal repositories and git worktrees.
+- Decision: Store all Blackbox runtime state under the repository common Git directory returned by `git rev-parse --git-common-dir`, rooted at `<git-common-dir>/blackbox`.
+- Rationale: This respects the PRD, avoids polluting the source tree, and makes normal repositories and linked worktrees share one store.
 
 ## D-002: Initial implementation style
 
@@ -23,8 +23,8 @@
 
 ## D-005: Repository metadata identity
 
-- Decision: Store canonical repository root, resolved Git directory, and a SHA-256 ID derived from the canonical root in `repository.json`; write it only when absent.
-- Rationale: The root path is stable across repeated initialization and avoids identity changes caused by temporary symlink paths.
+- Decision: Store canonical repository root, resolved common Git directory, and a SHA-256 ID derived from that common Git directory in `repository.json`; write it only when absent.
+- Rationale: The common Git directory is stable across linked worktrees, so all worktrees address one repository history.
 
 ## D-006: Autonomous runner commit ownership
 
@@ -55,13 +55,13 @@
 
 ## D-011: Observable event recording
 
-- Decision: Record completed commands as immutable rows and use audit events for normalized session/turn lifecycle events; command execution uses Node's synchronous child-process API.
-- Rationale: This captures the full result available at command completion without requiring a mutable in-progress history or agent-specific integration.
+- Decision: Stream child output to the terminal and append it to bounded 64 KiB temporary chunks before persisting chunk rows; turn state is finalized after child close.
+- Rationale: Verbose agent sessions cannot be limited by synchronous child-process buffers, and chunk rows preserve complete stdout/stderr without unlimited memory growth.
 
 ## D-012: Codex process boundary
 
-- Decision: The Codex adapter launches the local `codex` executable with inherited stdio and forwards arguments unchanged; lifecycle events are recorded around the process.
-- Rationale: Inherited stdio preserves the normal interactive CLI while avoiding credential interception or assumptions about vendor-private protocols.
+- Decision: `blackbox codex` launches a local Codex app-server and connects the normal Codex TUI through a localhost WebSocket proxy; `blackbox codex exec ...` remains a separate non-interactive process wrapper.
+- Rationale: The official app-server JSON-RPC stream exposes thread, turn, user-item, agent-item, command, and completion events while `codex --remote` preserves the standard interactive terminal experience.
 
 ## D-013: Claude process boundary
 
@@ -93,3 +93,13 @@
 - Decision: Store only a salted scrypt password verifier, require it for `clear`, and require `--yes` after a preview; pruning removes only unreferenced payload rows.
 - Rationale: This keeps destructive actions local and explicit while preserving historical metadata and avoiding plaintext credentials.
 - Ceiling: Output pruning currently targets standalone payload rows; inline command output migration can be added when payload storage is wired into command capture.
+
+## D-019: Worktree identity compatibility
+
+- Decision: New repositories hash the canonical common Git directory. If an existing `repository.json` under that common directory contains an ID, commands continue using that stored ID regardless of its legacy path value.
+- Rationale: The metadata file is already scoped to the common Git directory. Reusing its ID makes linked worktrees share new stores while preserving visibility of turns recorded by the previous implementation; changing an existing ID would orphan foreign-keyed history. The compatibility read is idempotent and needs no data rewrite.
+
+## D-020: Repository-scoped Codex resume
+
+- Decision: `blackbox codex resume` injects the invocation cwd into `thread/list` requests, while `resume --all` preserves global discovery. Codex thread IDs are mapped to Blackbox repository IDs, worktree roots, and session cwd values without replacing Codex IDs.
+- Rationale: The App Server supports cwd filtering, and repository-scoped discovery prevents resuming an unrelated project. The explicit global flag keeps native cross-repository discovery available when requested.

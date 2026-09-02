@@ -20,6 +20,16 @@ CREATE TABLE IF NOT EXISTS sessions (
   ended_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS codex_threads (
+  thread_id TEXT PRIMARY KEY,
+  repository_id TEXT NOT NULL REFERENCES repositories(id),
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  worktree_root TEXT NOT NULL,
+  cwd TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS turns (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -53,6 +63,14 @@ CREATE TABLE IF NOT EXISTS commands (
   duration_ms INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS command_output_chunks (
+  command_id TEXT NOT NULL REFERENCES commands(id),
+  stream TEXT NOT NULL,
+  sequence INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  PRIMARY KEY (command_id, stream, sequence)
+);
+
 CREATE TABLE IF NOT EXISTS payloads (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
@@ -80,6 +98,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS sessions_repository_id ON sessions(repository_id);
+CREATE INDEX IF NOT EXISTS codex_threads_repository_id ON codex_threads(repository_id);
 CREATE INDEX IF NOT EXISTS turns_session_id ON turns(session_id);
 CREATE INDEX IF NOT EXISTS commands_turn_id ON commands(turn_id);
 CREATE INDEX IF NOT EXISTS file_changes_turn_id ON file_changes(turn_id);
@@ -92,8 +111,6 @@ CREATE TRIGGER IF NOT EXISTS sessions_append_only_update
 BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS sessions_append_only_delete
 BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
-CREATE TRIGGER IF NOT EXISTS turns_append_only_update
-BEFORE UPDATE ON turns BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS turns_append_only_delete
 BEFORE DELETE ON turns BEGIN SELECT RAISE(ABORT, 'historical records are append-only'); END;
 CREATE TRIGGER IF NOT EXISTS checkpoints_append_only_update
@@ -123,6 +140,7 @@ function getDatabasePath(blackboxRoot) {
 function initializeDatabase(blackboxRoot) {
   const database = new DatabaseSync(getDatabasePath(blackboxRoot));
   database.exec(schema);
+  database.exec("DROP TRIGGER IF EXISTS turns_append_only_update");
   database.exec("DROP TRIGGER IF EXISTS payloads_append_only_delete");
   const columns = database.prepare("PRAGMA table_info(commands)").all().map((column) => column.name);
   for (const [name, definition] of [["sequence", "INTEGER NOT NULL DEFAULT 0"], ["cwd", "TEXT NOT NULL DEFAULT ''"], ["duration_ms", "INTEGER"]]) {

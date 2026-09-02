@@ -72,13 +72,13 @@ Task status values:
   - Captured command output is linked to the correct turn.
 
 ## BBX-008
-- Status: `COMPLETE`
+- Status: `IN_PROGRESS`
 - Scope: Add the Codex adapter and translate observable Codex events into normalized Blackbox events.
 - Dependencies: `BBX-007`
 - Acceptance criteria:
-  - `blackbox codex` forwards CLI args transparently.
-  - Codex session lifecycle events are recorded.
-  - Command and message events normalize into Blackbox events.
+  - `blackbox codex` provides the normal interactive Codex TUI through the app-server protocol.
+  - Each Codex thread turn records prompt, visible response, commands, checkpoints, and file changes.
+  - A real installed Codex interactive edit must be verified before this task is marked COMPLETE.
 
 ## BBX-009
 - Status: `COMPLETE`
@@ -99,13 +99,14 @@ Task status values:
   - `file` shows the history of events affecting one path.
 
 ## BBX-011
-- Status: `COMPLETE`
+- Status: `IN_PROGRESS`
 - Scope: Add `blackbox blame` and `blackbox why` for line-level provenance.
 - Dependencies: `BBX-010`
 - Acceptance criteria:
   - `blame` maps current lines to Blackbox turns or manual checkpoints.
   - `why` shows prompt, agent, branch, timestamp, commands, and previous checkpoint.
   - Provenance is derived from checkpoint history, not Git commit history.
+  - Real wrapped-agent prompt-to-line provenance must be verified before this task is marked COMPLETE.
 
 ## BBX-012
 - Status: `COMPLETE`

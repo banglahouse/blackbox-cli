@@ -2,6 +2,7 @@ const { spawnSync } = require("node:child_process");
 const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 const { appendAuditEvent, getDatabasePath } = require("./storage");
+const fs = require("node:fs");
 
 const EVENT_TYPES = Object.freeze([
   "SESSION_STARTED", "SESSION_ENDED", "PROMPT_SUBMITTED", "AGENT_MESSAGE",
@@ -43,6 +44,46 @@ function recordTurn(blackboxRoot, { id = crypto.randomUUID(), sessionId, reposit
   return id;
 }
 
+function updateTurn(blackboxRoot, { id, status, endedAt, afterCheckpointId }) {
+  const database = openDatabase(blackboxRoot);
+  try {
+    database.prepare("UPDATE turns SET status = ?, ended_at = ?, after_checkpoint_id = ? WHERE id = ?").run(status, endedAt, afterCheckpointId, id);
+  } finally {
+    database.close();
+  }
+  return id;
+}
+
+function startTurn(blackboxRoot, { id = crypto.randomUUID(), sessionId, repositoryId, prompt, startedAt = new Date().toISOString(), beforeCheckpointId }) {
+  const database = openDatabase(blackboxRoot);
+  try { database.prepare("INSERT INTO turns (id, session_id, prompt, status, started_at, before_checkpoint_id) VALUES (?, ?, ?, 'IN_PROGRESS', ?, ?)").run(id, sessionId, prompt, startedAt, beforeCheckpointId); }
+  finally { database.close(); }
+  appendAuditEvent(blackboxRoot, { repositoryId, eventType: "PROMPT_SUBMITTED", payload: { type: "PROMPT_SUBMITTED", turnId: id, sessionId, prompt, captureLimitation: prompt.startsWith("(prompt unavailable:") ? "prompt was not supplied as a supported argument" : null }, createdAt: startedAt });
+  return id;
+}
+
+function recordCommandFromFiles(blackboxRoot, { id = crypto.randomUUID(), turnId, repositoryId, command, cwd, stdoutPath, stderrPath, exitCode, signal = null, startedAt, endedAt, durationMs, sequence = 1 }) {
+  const database = openDatabase(blackboxRoot);
+  try {
+    database.prepare("INSERT INTO commands (id, turn_id, command, sequence, cwd, stdout, stderr, exit_code, started_at, ended_at, duration_ms) VALUES (?, ?, ?, ?, ?, '', '', ?, ?, ?, ?)").run(id, turnId, command, sequence, cwd, exitCode, startedAt, endedAt, durationMs);
+    const insert = database.prepare("INSERT INTO command_output_chunks (command_id, stream, sequence, content) VALUES (?, ?, ?, ?)");
+    for (const [stream, filePath] of [["stdout", stdoutPath], ["stderr", stderrPath]]) {
+      const size = fs.statSync(filePath).size;
+      let sequenceNumber = 0;
+      const descriptor = fs.openSync(filePath, "r");
+      try {
+        for (let offset = 0; offset < size; offset += 64 * 1024) {
+          const buffer = Buffer.alloc(Math.min(64 * 1024, size - offset));
+          fs.readSync(descriptor, buffer, 0, buffer.length, offset);
+          insert.run(id, stream, sequenceNumber++, buffer.toString("utf8"));
+        }
+      } finally { fs.closeSync(descriptor); }
+    }
+  } finally { database.close(); }
+  appendAuditEvent(blackboxRoot, { repositoryId, eventType: "COMMAND_COMPLETED", payload: { type: "COMMAND_COMPLETED", commandId: id, turnId, exitCode, signal }, createdAt: endedAt });
+  return id;
+}
+
 function recordCommand(blackboxRoot, { id = crypto.randomUUID(), turnId, repositoryId, command, cwd, stdout = "", stderr = "", exitCode = null, startedAt = new Date().toISOString(), endedAt = startedAt, durationMs = 0, sequence }) {
   const database = openDatabase(blackboxRoot);
   try {
@@ -70,4 +111,4 @@ function captureCommand(blackboxRoot, { turnId, repositoryId, command, args = []
   };
 }
 
-module.exports = { EVENT_TYPES, captureCommand, normalizeEvent, recordCommand, recordSession, recordTurn };
+module.exports = { EVENT_TYPES, captureCommand, normalizeEvent, recordCommand, recordCommandFromFiles, recordSession, recordTurn, startTurn, updateTurn };

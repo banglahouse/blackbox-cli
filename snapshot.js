@@ -16,15 +16,6 @@ function ensureShadowRepository(shadowRoot) {
   if (!fs.existsSync(path.join(shadowRoot, "HEAD"))) runGit(["init", "--bare", shadowRoot]);
 }
 
-function gitIgnoredFiles(root, files) {
-  if (!files.length) return new Set();
-  const result = spawnSync("git", ["-C", root, "check-ignore", "--no-index", "--stdin", "-z"], {
-    encoding: "utf8",
-    input: `${files.map((filePath) => path.relative(root, filePath)).join("\0")}\0`,
-  });
-  return new Set(result.status === 0 ? result.stdout.split("\0").filter(Boolean) : []);
-}
-
 function readRules(filePath) {
   if (!fs.existsSync(filePath)) return [];
   return fs.readFileSync(filePath, "utf8").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
@@ -50,25 +41,11 @@ function matchesUserRules(relativePath, rules) {
 }
 
 function collectFiles(root, gitDir) {
-  const files = [];
-  const excludedRoot = fs.realpathSync(gitDir);
-  function visit(current) {
-    if (path.resolve(current) === excludedRoot) return;
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const filePath = path.join(current, entry.name);
-      if (path.resolve(filePath) === excludedRoot || filePath.startsWith(`${excludedRoot}${path.sep}`)) continue;
-      if (entry.isDirectory()) visit(filePath);
-      else if (entry.isFile() || entry.isSymbolicLink()) files.push(filePath);
-    }
-  }
-  visit(root);
+  const result = spawnSync("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { encoding: "buffer" });
+  if (result.status !== 0) throw new Error(result.stderr?.toString().trim() || "git ls-files failed");
   const rootRules = readRules(path.join(root, ".blackboxignore"));
   const builtInRules = [".env", ".env.*", "*.pem", "*.key", "credentials*", "secrets/"];
-  const gitIgnored = gitIgnoredFiles(root, files);
-  return files.filter((filePath) => {
-    const relativePath = path.relative(root, filePath).split(path.sep).join("/");
-    return !gitIgnored.has(relativePath) && !matchesUserRules(relativePath, [...builtInRules, ...rootRules]);
-  });
+  return result.stdout.toString("utf8").split("\0").filter(Boolean).map((relativePath) => path.join(root, relativePath)).filter((filePath) => !matchesUserRules(path.relative(root, filePath).split(path.sep).join("/"), [...builtInRules, ...rootRules]));
 }
 
 function blobForFile(shadowRoot, filePath) {
@@ -88,7 +65,14 @@ function captureSnapshot({ repositoryRoot, blackboxRoot, gitDir }) {
   try {
     for (const filePath of collectFiles(repositoryRoot, gitDir)) {
       const relativePath = path.relative(repositoryRoot, filePath);
-      const [blobHash, mode] = blobForFile(shadowRoot, filePath);
+      let blob;
+      try {
+        blob = blobForFile(shadowRoot, filePath);
+      } catch (error) {
+        if (error.code === "EACCES" || error.code === "EPERM") continue;
+        throw error;
+      }
+      const [blobHash, mode] = blob;
       runGit(["--git-dir", shadowRoot, "update-index", "--add", "--cacheinfo", `${mode},${blobHash},${relativePath}`], { env: { ...process.env, GIT_INDEX_FILE: indexPath } });
     }
     return runGit(["--git-dir", shadowRoot, "write-tree"], { env: { ...process.env, GIT_INDEX_FILE: indexPath } });
