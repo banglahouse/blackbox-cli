@@ -20,6 +20,13 @@ npm link
 blackbox --version
 ```
 
+After publication:
+
+```bash
+npm install --global blackbox-cli-provence
+blackbox --version
+```
+
 ## Quick start
 
 ```bash
