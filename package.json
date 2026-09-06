@@ -1,21 +1,40 @@
 {
-  "name": "blackbox",
+  "name": "blackbox-cli-provence",
   "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "bangla_house",
+  "description": "Local provenance tracking for AI-assisted Git development",
+  "license": "MIT",
+  "author": "banla_house",
   "type": "commonjs",
   "main": "index.js",
   "bin": {
     "blackbox": "./index.js"
   },
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/banglahouse/blackbox-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/banglahouse/blackbox-cli/issues"
+  },
+  "homepage": "https://github.com/banglahouse/blackbox-cli#readme",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
     "test": "node --test",
     "lint": "node --check index.js",
+    "check": "npm test && npm run lint",
+    "prepublishOnly": "npm run check",
     "codex:plan": "node scripts/codex-runner.mjs",
     "codex:build": "node scripts/codex-runner.mjs"
-  }
+  },
+  "files": [
+    "*.js",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ]
 }

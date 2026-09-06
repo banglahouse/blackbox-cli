@@ -1,1 +1,24 @@
 .codex-runs/
+
+# Dependencies
+node_modules/
+
+# Local npm credentials/configuration
+.npmrc
+.npm/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and generated output
+*.log
+coverage/
+dist/
+*.tgz
+
+# Local operating-system/editor files
+.DS_Store
+.vscode/
+.idea/
